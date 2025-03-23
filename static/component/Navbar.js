@@ -1,5 +1,5 @@
 export default {
-    template: `
+  template: `
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3">
       <a class="navbar-brand" href="#">A-Z Household Services</a>
       <div class="collapse navbar-collapse">
@@ -9,7 +9,7 @@ export default {
             <router-link class="nav-link" to="/">Home</router-link>
           </li>
           <li class="nav-item">
-            <router-link class="nav-link" to="/dashboard">Dashboard</router-link>
+            <a class="nav-link" href="#" @click.prevent="goToDashboard">Dashboard</a>
           </li>
         </ul>
 
@@ -36,20 +36,31 @@ export default {
         </ul>
       </div>
     </nav>
-  `,
-    data() {
-        return {
-            searchQuery: "",
-        };
+    `,
+  data() {
+    return {
+      searchQuery: "",
+    };
+  },
+  methods: {
+    handleSearch() {
+      if (this.searchQuery) {
+        alert(`Searching for: ${this.searchQuery}`);
+        // Search logic implement here if needed
+      } else {
+        alert("Please enter a search term!");
+      }
     },
-    methods: {
-        handleSearch() {
-            if (this.searchQuery) {
-                alert(`Searching for: ${this.searchQuery}`);
-                // Search logic implement here if needed
-            } else {
-                alert("Please enter a search term!");
-            }
-        },
-    },
+    goToDashboard() {
+      const userRole = localStorage.getItem('role');
+      if (userRole === 'admin') {
+        this.$router.push('/admindashboard');
+      } else if (userRole === 'customer' || userRole === 'professional') {
+        this.$router.push('/userdashboard');
+      } else {
+        alert('Please log in to access the dashboard!');
+        this.$router.push('/login');
+      }
+    }
+  }
 };

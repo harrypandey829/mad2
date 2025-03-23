@@ -1,5 +1,5 @@
 export default {
-    template: `
+  template: `
     <div class="container my-5">
       <div class="row justify-content-center">
         <div class="col-md-5 col-lg-4">
@@ -36,57 +36,64 @@ export default {
         </div>
       </div>
     </div>
-  `,
-    data() {
-        return {
-            formData: {
-                email: "", // Email ko formData me bind kiya
-                password: "", // Password ko bhi bind kiya
-            },
-        };
+    `,
+  data() {
+    return {
+      formData: {
+        email: "",
+        password: "",
+      },
+    };
+  },
+  methods: {
+    async loginUser() {
+      try {
+        const response = await fetch("/api/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify(this.formData),
+        });
+
+        const data = await response.json();
+        // --- NEW DEBUG LOGS START HERE ---
+        console.log("Login Response:", data); // Logs the full response from /api/login
+        console.log("Role from Server:", data.role); // Logs the specific role returned
+        // --- NEW DEBUG LOGS END HERE ---
+
+        if (response.ok && data.success) {
+          localStorage.setItem("authToken", data.token || '');
+          localStorage.setItem("userId", data.userId);
+          localStorage.setItem("fullName", data.fullName);
+          localStorage.setItem("role", data.role);
+
+          // --- NEW DEBUG LOG ---
+          console.log("Cookies after login:", document.cookie); // Logs cookies to check session
+          // --- END NEW DEBUG LOG ---
+
+          if (data.role === "admin") {
+            alert(`Welcome, Admin ${data.fullName}!`);
+            this.$router.push("/admindashboard");
+          } else if (data.role === "professional") {
+            alert(`Welcome, Professional ${data.fullName}!`);
+            this.$router.push("/professionaldashboard");
+          } else if (data.role === "customer") {
+            alert(`Welcome, Customer ${data.fullName}!`);
+            this.$router.push("/customerdashboard");
+          } else {
+            alert("Unknown role! Redirecting to home.");
+            this.$router.push("/");
+          }
+        } else {
+          throw new Error(data.message || "Login failed! Invalid credentials.");
+        }
+      } catch (error) {
+        console.error("Login Error:", error);
+        alert(error.message);
+      }
     },
-    methods: {
-        async loginUser() {
-            try {
-                const response = await fetch("/api/login", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(this.formData),
-                });
-
-                // Response check
-                if (!response.ok) {
-                    throw new Error("Login failed! Invalid credentials.");
-                }
-
-                // Parse JSON response
-                const data = await response.json();
-                console.log("API Response Data:", data); // Debug API response
-
-                // ✅ Check success condition
-                if (data.success) {
-                    // Auth token, userId, and fullName ko localStorage me store karo
-                    localStorage.setItem("authToken", data.token); // Token store
-                    localStorage.setItem("fullName", data.fullName); // Full Name store
-                    localStorage.setItem("userId", data.userId); // User ID store
-
-                    // Console logs for confirmation
-                    console.log("Auth Token:", localStorage.getItem("authToken"));
-                    console.log("User Full Name:", localStorage.getItem("fullName"));
-                    console.log("User ID:", localStorage.getItem("userId"));
-
-                    // ✅ Welcome alert and redirect
-                    alert(`Welcome, ${data.fullName}! Login Successful.`);
-                    this.$router.push("/dashboard"); // Redirect to dashboard
-                } else {
-                    alert(data.message || "Login failed. Please try again.");
-                }
-            } catch (error) {
-                console.error("Error:", error);
-                alert("Something went wrong. Please try again later.");
-            }
-        },
-    },
+  },
 };

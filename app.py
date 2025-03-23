@@ -3,6 +3,7 @@ from application.config import localdevelopmentConfig
 from application.models import * 
 from flask_security import Security , SQLAlchemyUserDatastore
 from flask_security import hash_password
+from application.resources import init_api  # Import init_api from resource.py
 
 app =None
 def create_app():
@@ -13,6 +14,8 @@ def create_app():
     db.init_app(app)
     datastore = SQLAlchemyUserDatastore(db, User ,Role)# Datastore is a class which allows us to create entry in to database .
     app.security = Security(app, datastore) # Connect our appplication to flask security .
+    # Initialize API routes from resource.py
+    init_api(app)
     app.app_context().push()
     return app
 
