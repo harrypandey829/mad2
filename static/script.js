@@ -2,9 +2,21 @@ import Home from './component/Home.js';
 import Login from './component/Login.js';
 import Register from './component/Register.js';
 import AdminDashboard from './component/AdminDashboard.js';
+import AdminHome from './component/AdminHome.js';
+import AdminUsers from './component/AdminUsers.js';
+import AdminHistory from './component/AdminHistory.js';
+import AdminOngoing from './component/AdminOngoing.js';
+import AdminAnalytics from './component/AdminAnalytics.js';
 import UserDashboard from './component/UserDashboard.js';
-import ProfessionalDashboard from './component/ProfessionalDashboard.js'; // New import
-import CustomerDashboard from './component/CustomerDashboard.js'; // New import
+import ProfessionalDashboard from './component/ProfessionalDashboard.js';
+import ProfessionalHome from './component/ProfessionalHome.js';
+import ProfessionalRequested from './component/ProfessionalRequested.js';
+import ProfessionalProfile from './component/ProfessionalProfile.js';
+import CustomerDashboard from './component/CustomerDashboard.js';
+import CustomerHome from './component/CustomerHome.js';
+import CustomerHistory from './component/CustomerHistory.js';
+import CustomerOngoing from './component/CustomerOngoing.js';
+import CustomerProfile from './component/CustomerProfile.js';
 import Navbar from './component/Navbar.js';
 import Footer from './component/Footer.js';
 
@@ -12,12 +24,41 @@ const routes = [
   { path: '/', component: Home },
   { path: '/login', component: Login },
   { path: '/register', component: Register },
-  { path: '/admindashboard', component: AdminDashboard },
-  { path: '/professionaldashboard', component: ProfessionalDashboard }, // New route
-  { path: '/customerdashboard', component: CustomerDashboard }, // New route
+  {
+    path: '/admindashboard',
+    component: AdminDashboard,
+    children: [
+      { path: 'home', component: AdminHome },
+      { path: 'users', component: AdminUsers },
+      { path: 'history', component: AdminHistory },
+      { path: 'ongoing', component: AdminOngoing },
+      { path: 'analytics', component: AdminAnalytics },
+      { path: '', redirect: 'home' }
+    ]
+  },
+  {
+    path: '/professionaldashboard',
+    component: ProfessionalDashboard,
+    children: [
+      { path: 'home', component: ProfessionalHome },
+      { path: 'requested', component: ProfessionalRequested },
+      { path: 'profile', component: ProfessionalProfile },
+      { path: '', redirect: 'home' }
+    ]
+  },
+  {
+    path: '/customerdashboard',
+    component: CustomerDashboard,
+    children: [
+      { path: '', redirect: 'home' }, // Default to home
+      { path: 'home', component: CustomerHome },
+      { path: 'history', component: CustomerHistory },
+      { path: 'ongoing', component: CustomerOngoing },
+      { path: 'profile', component: CustomerProfile }
+    ]
+  },
   { path: '/userdashboard', component: UserDashboard },
 ];
-
 const router = new VueRouter({
   routes,
 

@@ -59,20 +59,18 @@ export default {
         });
 
         const data = await response.json();
-        // --- NEW DEBUG LOGS START HERE ---
-        console.log("Login Response:", data); // Logs the full response from /api/login
-        console.log("Role from Server:", data.role); // Logs the specific role returned
-        // --- NEW DEBUG LOGS END HERE ---
+        console.log("Login Response:", data); // Debug: Full response
+        console.log("Role from Server:", data.role); // Debug: Role
+        console.log("Full Name from Server:", data.fullName); // Debug: Full Name
 
         if (response.ok && data.success) {
           localStorage.setItem("authToken", data.token || '');
           localStorage.setItem("userId", data.userId);
-          localStorage.setItem("fullName", data.fullName);
+          localStorage.setItem("fullName", data.fullName || 'Unknown User'); // Fallback added
           localStorage.setItem("role", data.role);
+          localStorage.setItem("dateOfCreation", data.date_of_creation || 'N/A'); // Optional: for profile
 
-          // --- NEW DEBUG LOG ---
-          console.log("Cookies after login:", document.cookie); // Logs cookies to check session
-          // --- END NEW DEBUG LOG ---
+          console.log("Cookies after login:", document.cookie); // Debug: Cookies
 
           if (data.role === "admin") {
             alert(`Welcome, Admin ${data.fullName}!`);
