@@ -2,6 +2,7 @@ from flask import Flask
 from application.config import localdevelopmentConfig
 from application.models import * 
 from flask_security import Security , SQLAlchemyUserDatastore
+from flask_migrate import Migrate
 from flask_security import hash_password
 from application.resources import init_api  # Import init_api from resource.py
 
@@ -16,6 +17,7 @@ def create_app():
     app.security = Security(app, datastore) # Connect our appplication to flask security .
     # Initialize API routes from resource.py
     init_api(app)
+    migrate = Migrate(app, db)  # Flask-Migrate initialize 
     app.app_context().push()
     return app
 

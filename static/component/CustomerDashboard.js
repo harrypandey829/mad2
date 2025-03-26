@@ -31,6 +31,7 @@ export default {
             <div class="card shadow-sm border-0" style="width: 200px; background: #34495e;">
               <div class="card-body p-2 text-center text-white">
                 <h6 class="mb-0 fw-bold">{{ fullName }}</h6>
+                <p class="mb-0">Rating: {{ userRating || 'Not Rated' }}</p>
               </div>
             </div>
           </div>
@@ -43,9 +44,29 @@ export default {
   data() {
     return {
       fullName: localStorage.getItem("fullName") || "Unknown User",
+      userRating: null
     };
   },
+  mounted() {
+    this.fetchUserInfo();
+  },
   methods: {
+    async fetchUserInfo() {
+      try {
+        const response = await fetch('/userinfo', {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Authentication-Token': localStorage.getItem('authToken') || ''
+          }
+        });
+        if (!response.ok) throw new Error('Failed to fetch user info');
+        const data = await response.json();
+        this.userRating = data.user_rating;
+      } catch (error) {
+        console.error('Error fetching user info:', error);
+      }
+    },
     logout() {
       localStorage.clear();
       this.$router.push('/login');

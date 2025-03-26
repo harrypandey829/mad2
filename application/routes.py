@@ -3,6 +3,8 @@ from flask_security import hash_password, auth_required, current_user,roles_requ
 from .models import *
 from flask_security.utils import verify_password
 from flask import current_app as app 
+from datetime import datetime
+from sqlalchemy import func
 
 # Create Blueprint
 
@@ -150,21 +152,16 @@ def get_professionals_for_service(service_id):
         if not current_user.has_role('customer'):
             return jsonify({'error': 'Unauthorized Access! Only Customers can view professionals.'}), 403
 
-        # Check if service exists
         service = Service.query.get(service_id)
         if not service:
             return jsonify({'error': 'Service not found.'}), 404
 
-        # Fetch professionals with matching service_type
         professionals = User.query.filter(
             User.roles.any(name='professional'),
             User.service_type == service.service_type,
-            User.is_blocked == False
-            # Removed is_verified condition temporarily for testing
+            User.is_blocked == False,
+            User.is_verified == True  # Added filter
         ).all()
-
-        # Debugging: Log how many professionals found
-        print(f"Service ID: {service_id}, Service Type: {service.service_type}, Found Professionals: {len(professionals)}")
 
         professionals_list = [{
             'id': pro.id,
@@ -177,11 +174,9 @@ def get_professionals_for_service(service_id):
         return jsonify({'professionals': professionals_list}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
 #Service booking .
 
-from flask import jsonify, request
-from application.models import ServiceRequest, db
+
 
 @app.route('/api/book-service', methods=['POST'])
 @auth_required('token')
@@ -227,38 +222,46 @@ def get_service_history():
         if not current_user.has_role('customer'):
             return jsonify({'error': 'Unauthorized Access! Only Customers can view history.'}), 403
         
-        history = ServiceRequest.query.filter_by(customer_id=current_user.id).all()
+        history = ServiceRequest.query.filter(
+            ServiceRequest.customer_id == current_user.id,
+            ServiceRequest.status.in_(['Completed', 'Rejected'])
+        ).all()
         history_list = [{
             'id': req.id,
             'service_type': req.service_type,
             'status': req.status,
             'date_of_request': req.date_of_request.strftime('%Y-%m-%d') if req.date_of_request else 'N/A',
             'date_of_completion': req.date_of_completion.strftime('%Y-%m-%d') if req.date_of_completion else None,
-            'service_rating': req.service_rating
+            'service_rating': req.service_rating,
+            'professional_name': User.query.get(req.professional_id).full_name if req.professional_id else 'N/A',  # Added
+            'customer_rating': req.customer_rating  # Added
         } for req in history]
         
         return jsonify(history_list), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+
 @app.route('/api/customer/ongoing-services', methods=['GET'])
 @auth_required('token')
 def get_ongoing_services_customer():
     if not current_user.has_role('customer'):
         return jsonify({'error': 'Unauthorized Access! Only Customers can view ongoing services.'}), 403
     
-    # Fetch ongoing services for the logged-in customer
-    ongoing = ServiceRequest.query.filter_by(customer_id=current_user.id, status='ongoing').all()
+    ongoing = ServiceRequest.query.filter(
+        ServiceRequest.customer_id == current_user.id,
+        ServiceRequest.status.in_(['Requested', 'Ongoing', 'CustomerFinished'])  # Removed 'Accepted'
+    ).all()
     ongoing_list = [{
         'id': req.id,
         'service_type': req.service_type,
         'status': req.status,
-        'professional_name': User.query.get(req.professional_id).full_name if req.professional_id else None,
-        'date_of_request': req.date_of_request.strftime('%Y-%m-%d') if req.date_of_request else 'N/A'
+        'professional_name': User.query.get(req.professional_id).full_name if req.professional_id else 'Not Assigned Yet',
+        'date_of_request': req.date_of_request.strftime('%Y-%m-%d') if req.date_of_request else 'N/A',
+        'service_rating': req.service_rating
     } for req in ongoing]
     
     return jsonify(ongoing_list), 200
-
-
 
 
 
@@ -291,12 +294,23 @@ def toggle_verification(user_id):
     try:
         user = User.query.get_or_404(user_id)
         data = request.json
-        user.is_verified = data.get('is_verified', False)
+        is_verified = data.get('is_verified', False)
+
+        # Agar user already verified hai, to change allow nahi karenge
+        if user.is_verified:
+            return jsonify({'error': 'User is already verified and cannot be unverified'}), 400
+
+        # Sirf False se True ki taraf ja sakta hai
+        if not is_verified:
+            return jsonify({'error': 'Invalid request: Can only verify users, not unverify'}), 400
+
+        user.is_verified = True  # Ek baar True ho gaya, to permanent
         db.session.commit()
-        return jsonify({'message': 'Verification updated'}), 200
+        return jsonify({'message': 'User verified successfully'}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+    
 
 # Toggle Block
 @app.route('/api/admin/users/<int:user_id>/block', methods=['PUT'])
@@ -306,12 +320,26 @@ def toggle_block(user_id):
     try:
         user = User.query.get_or_404(user_id)
         data = request.json
-        user.is_blocked = data.get('is_blocked', False)
+        is_blocked = data.get('is_blocked', False)
+
+        # If trying to block, check conditions
+        if is_blocked:
+            completed_services = ServiceRequest.query.filter_by(
+                customer_id=user.id,
+                status='Completed'
+            ).count()
+            if completed_services < 2:
+                return jsonify({'error': 'Cannot block user with fewer than 2 completed services'}), 400
+            if user.user_rating is None or user.user_rating >= 3:
+                return jsonify({'error': 'Cannot block user with rating 3 or higher (or unrated)'}), 400
+
+        user.is_blocked = is_blocked
         db.session.commit()
         return jsonify({'message': 'Block status updated'}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+    
 
 # Service History
 @app.route('/api/admin/history', methods=['GET'])
@@ -319,7 +347,7 @@ def toggle_block(user_id):
 @roles_required('admin')
 def get_service_history_admin():
     try:
-        history = ServiceRequest.query.all()
+        history = ServiceRequest.query.filter_by(status='Completed').all()
         return jsonify([{
             'id': req.id,
             'service_type': req.service_type,
@@ -328,7 +356,8 @@ def get_service_history_admin():
             'status': req.status,
             'date_of_request': req.date_of_request.strftime('%Y-%m-%d') if req.date_of_request else 'N/A',
             'date_of_completion': req.date_of_completion.strftime('%Y-%m-%d') if req.date_of_completion else None,
-            'service_rating': req.service_rating
+            'service_rating': req.service_rating,  # Customer's rating for service
+            'customer_rating': req.customer_rating  # Professional's rating for customer
         } for req in history]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -354,7 +383,7 @@ def review_service(request_id):
 @roles_required('admin')
 def get_ongoing_services_admin():
     try:
-        ongoing = ServiceRequest.query.filter(ServiceRequest.status.in_(['Requested', 'Accepted'])).all()
+        ongoing = ServiceRequest.query.filter_by(status='Ongoing').all()
         return jsonify([{
             'id': req.id,
             'service_type': req.service_type,
@@ -372,42 +401,42 @@ def get_ongoing_services_admin():
 @roles_required('admin')
 def get_analytics():
     try:
-        # Customers by Orders
-        customers = db.session.query(
-            User.full_name.label('name'),
-            func.count(ServiceRequest.id).label('orders')
-        ).join(ServiceRequest, User.id == ServiceRequest.customer_id)\
-         .group_by(User.id, User.full_name)\
-         .order_by(func.count(ServiceRequest.id).desc())\
-         .limit(5).all()
-        
-        # Professionals by Services
+        # Professionals by Services (min 1 service)
         professionals = db.session.query(
             User.full_name.label('name'),
             func.count(ServiceRequest.id).label('services')
         ).join(ServiceRequest, User.id == ServiceRequest.professional_id)\
+         .filter(ServiceRequest.status == 'Completed')\
          .group_by(User.id, User.full_name)\
-         .order_by(func.count(ServiceRequest.id).desc())\
-         .limit(5).all()
-        
-        # Services by Orders
+         .having(func.count(ServiceRequest.id) >= 1)\
+         .all()
+
+        # Customers by Completed Orders
+        customers = db.session.query(
+            User.full_name.label('name'),
+            func.count(ServiceRequest.id).label('orders')
+        ).join(ServiceRequest, User.id == ServiceRequest.customer_id)\
+         .filter(ServiceRequest.status == 'Completed')\
+         .group_by(User.id, User.full_name)\
+         .all()
+
+        # Services by Completed Orders
         services = db.session.query(
             Service.service_type.label('type'),
             func.count(ServiceRequest.id).label('orders')
         ).join(ServiceRequest, Service.id == ServiceRequest.service_id)\
+         .filter(ServiceRequest.status == 'Completed')\
          .group_by(Service.id, Service.service_type)\
-         .order_by(func.count(ServiceRequest.id).desc())\
-         .limit(5).all()
+         .all()
 
         return jsonify({
-            'customers': [{'name': c.name, 'orders': c.orders} for c in customers],
             'professionals': [{'name': p.name, 'services': p.services} for p in professionals],
+            'customers': [{'name': c.name, 'orders': c.orders} for c in customers],
             'services': [{'type': s.type, 'orders': s.orders} for s in services]
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-
+    
 
 
 #professional functionality 
@@ -437,7 +466,6 @@ def get_requested_services():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Accept Service
 @app.route('/api/professional/service/<int:service_id>/accept', methods=['PUT'])
 @auth_required('token')
 @roles_required('professional')
@@ -446,12 +474,25 @@ def accept_service(service_id):
         service = ServiceRequest.query.get_or_404(service_id)
         if service.professional_id != current_user.id:
             return jsonify({'error': 'Unauthorized'}), 403
-        service.status = 'Accepted'
+        if service.status != 'Requested':
+            return jsonify({'error': 'Can only accept Requested services'}), 400
+        
+        # Check if professional already has an ongoing service
+        ongoing_count = ServiceRequest.query.filter_by(
+            professional_id=current_user.id,
+            status='Ongoing'
+        ).count()
+        if ongoing_count > 0:
+            return jsonify({'error': 'You can only accept one service at a time'}), 400
+        
+        service.status = 'Ongoing'
         db.session.commit()
-        return jsonify({'message': 'Service accepted'}), 200
+        return jsonify({'message': 'Service accepted and marked as ongoing'}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+    
+
 
 # Reject Service
 @app.route('/api/professional/service/<int:service_id>/reject', methods=['PUT'])
@@ -478,13 +519,32 @@ def finish_service(service_id):
         service = ServiceRequest.query.get_or_404(service_id)
         if service.professional_id != current_user.id:
             return jsonify({'error': 'Unauthorized'}), 403
-        service.status = 'Finished'
+        
+        if service.status != 'CustomerFinished':
+            return jsonify({'error': 'Customer must finish the service first'}), 400
+        
+        data = request.json
+        customer_rating = data.get('customer_rating')  # Optional rating from professional
+        
+        service.status = 'Completed'
         service.date_of_completion = datetime.utcnow()
+        
+        if customer_rating and 1 <= customer_rating <= 7:
+            service.customer_rating = customer_rating
+            # Update customer's average rating
+            customer = User.query.get(service.customer_id)
+            if customer:
+                requests = ServiceRequest.query.filter_by(customer_id=customer.id).filter(ServiceRequest.customer_rating.isnot(None)).all()
+                total_rating = sum(req.customer_rating for req in requests)
+                customer.user_rating = total_rating // len(requests) if requests else 0
+        
         db.session.commit()
-        return jsonify({'message': 'Service finished'}), 200
+        return jsonify({'message': 'Service completed successfully'}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+    
+
 
 # Update Professional Profile
 @app.route('/api/professional/profile', methods=['PUT'])
@@ -506,27 +566,148 @@ def update_professional_profile():
 
 @app.route('/api/professional/ongoing-services', methods=['GET'])
 @auth_required('token')
+@roles_required('professional')
 def get_ongoing_services():
-    if not current_user.has_role('service_professional'):  # DB role name
-        return jsonify({'error': 'Unauthorized Access! Only Professionals can view ongoing services.'}), 403
-    
-    ongoing_requests = ServiceRequest.query.filter_by(
-        professional_id=current_user.id,
-        status='ongoing'
-    ).all()
-
-    services_list = []
-    for request in ongoing_requests:
-        service = Service.query.get(request.service_id)
-        customer = User.query.get(request.customer_id)
-        services_list.append({
+    try:
+        ongoing_requests = ServiceRequest.query.filter(
+            ServiceRequest.professional_id == current_user.id,
+            ServiceRequest.status.in_(['Ongoing', 'CustomerFinished'])  # Updated to include CustomerFinished
+        ).all()
+        
+        services_list = [{
             'id': request.id,
-            'service_type': service.service_type,
-            'customer_name': customer.full_name or customer.email.split('@')[0],
-            'customer_rating': customer.user_rating,
-            'customer_address': customer.address,
-            'status': request.status,
-            'scheduled_time': request.scheduled_time.strftime('%Y-%m-%d %H:%M') if request.scheduled_time else 'N/A'
-        })
+            'service_type': request.service_type,
+            'customer_name': User.query.get(request.customer_id).full_name or User.query.get(request.customer_id).email.split('@')[0],
+            'customer_rating': User.query.get(request.customer_id).user_rating,
+            'customer_address': User.query.get(request.customer_id).address,
+            'status': request.status
+        } for request in ongoing_requests]
+        
+        return jsonify({'services': services_list}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/professional/service-history', methods=['GET'])
+@auth_required('token')
+@roles_required('professional')
+def get_service_history_professional():
+    try:
+        print(f"Fetching service history for user: {current_user.email}")
+        history = ServiceRequest.query.filter(
+            ServiceRequest.professional_id == current_user.id,
+            ServiceRequest.status.in_(['Completed', 'Rejected'])
+        ).all()
+        print(f"Found {len(history)} history services")
+        
+        history_list = [{
+            'id': req.id,
+            'service_type': req.service_type,
+            'customer_name': User.query.get(req.customer_id).full_name or User.query.get(req.customer_id).email.split('@')[0],
+            'customer_rating': User.query.get(req.customer_id).user_rating,  # Customer's average rating
+            'customer_address': User.query.get(req.customer_id).address,
+            'status': req.status,
+            'date_of_request': req.date_of_request.strftime('%Y-%m-%d') if req.date_of_request else 'N/A',
+            'date_of_completion': req.date_of_completion.strftime('%Y-%m-%d') if req.date_of_completion else 'N/A',
+            'service_rating': req.service_rating,  # Customer's rating for this service
+            'professional_rating': req.customer_rating  # Professional's rating for this service (renamed for clarity)
+        } for req in history]
+        
+        return jsonify({'services': history_list}), 200
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
     
-    return jsonify({'services': services_list}), 200
+
+@app.route('/api/customer/service/<int:service_id>/finish', methods=['PUT'])
+@auth_required('token')
+def customer_finish_service(service_id):
+    try:
+        if not current_user.has_role('customer'):
+            return jsonify({'error': 'Unauthorized Access! Only Customers can finish services.'}), 403
+        
+        service = ServiceRequest.query.get_or_404(service_id)
+        if service.customer_id != current_user.id:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        if service.status not in ['Ongoing', 'CustomerFinished']:
+            return jsonify({'error': 'Can only finish Ongoing services or update rating for CustomerFinished'}), 400
+        
+        data = request.json
+        rating = data.get('rating')  # Rating optional hai
+        
+        if service.status == 'Ongoing':
+            service.status = 'CustomerFinished'
+        
+        if rating and 1 <= rating <= 7:  # Rating range 1-7
+            service.service_rating = rating
+            # Update professional's average rating
+            professional = User.query.get(service.professional_id)
+            if professional:
+                requests = ServiceRequest.query.filter_by(professional_id=professional.id).filter(ServiceRequest.service_rating.isnot(None)).all()
+                total_rating = sum(req.service_rating for req in requests)
+                professional.user_rating = total_rating // len(requests) if requests else 0
+        
+        # Do NOT set to Completed here; wait for professional to finish
+        db.session.commit()
+        return jsonify({'message': 'Service marked as finished or rating updated by customer'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/api/professional/service/<int:service_id>/rate-customer', methods=['PUT'])
+@auth_required('token')
+@roles_required('professional')
+def rate_customer(service_id):
+    try:
+        service = ServiceRequest.query.get_or_404(service_id)
+        if service.professional_id != current_user.id:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        if service.status != 'Completed':
+            return jsonify({'error': 'Can only rate customer for Completed services'}), 400
+        
+        data = request.json
+        customer_rating = data.get('customer_rating')
+        
+        if not customer_rating or not (1 <= customer_rating <= 7):
+            return jsonify({'error': 'Rating must be between 1 and 7'}), 400
+        
+        # Assuming we add a customer_rating field to ServiceRequest (we'll update models.py)
+        service.customer_rating = customer_rating
+        
+        # Update customer's average rating
+        customer = User.query.get(service.customer_id)
+        if customer:
+            requests = ServiceRequest.query.filter_by(customer_id=customer.id).filter(ServiceRequest.customer_rating.isnot(None)).all()
+            total_rating = sum(req.customer_rating for req in requests)
+            customer.user_rating = total_rating // len(requests) if requests else 0
+        
+        db.session.commit()
+        return jsonify({'message': 'Customer rated successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    
+
+# ... (existing imports and code)
+
+@app.route('/api/admin/users/<int:user_id>/warn', methods=['PUT'])
+@auth_required('token')
+@roles_required('admin')
+def warn_user(user_id):
+    try:
+        user = User.query.get_or_404(user_id)
+        
+        # Check if already warned
+        if user.description and "Warning" in user.description:
+            return jsonify({'error': 'User is already warned'}), 400
+        
+        # Add warning to description
+        warning_message = "Warning: Low rating or behavior issue detected"
+        user.description = f"{user.description or ''} {warning_message}".strip()
+        
+        db.session.commit()
+        return jsonify({'message': 'User warned successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500

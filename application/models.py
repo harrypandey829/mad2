@@ -71,5 +71,6 @@ class ServiceRequest(db.Model):
     date_of_request = db.Column(db.Date, default=date.today)
     remarks = db.Column(db.String(500),nullable = True) 
     service_rating  = db.Column(db.Integer(),nullable =True)
+    customer_rating = db.Column(db.Integer(), nullable=True)
    
     

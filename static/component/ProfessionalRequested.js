@@ -59,11 +59,15 @@ export default {
                         'Content-Type': 'application/json',
                         'Authentication-Token': localStorage.getItem('authToken') || ''
                     },
-                    body: JSON.stringify({ status: 'Accepted' })
+                    body: JSON.stringify({})
                 });
-                if (!response.ok) throw new Error('Failed to accept service');
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Failed to accept service: ${errorText}`);
+                }
                 alert('Service accepted');
-                this.fetchRequestedServices();
+                this.fetchRequestedServices(); // Refresh requested list
+                this.$router.push('/professionaldashboard/home'); // Go to home to see ongoing
             } catch (error) {
                 console.error('Error accepting service:', error);
                 alert(error.message);
@@ -79,11 +83,15 @@ export default {
                             'Content-Type': 'application/json',
                             'Authentication-Token': localStorage.getItem('authToken') || ''
                         },
-                        body: JSON.stringify({ status: 'Rejected' })
+                        body: JSON.stringify({})
                     });
-                    if (!response.ok) throw new Error('Failed to reject service');
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Failed to reject service: ${errorText}`);
+                    }
                     alert('Service rejected');
-                    this.fetchRequestedServices();
+                    this.fetchRequestedServices(); // Refresh requested list
+                    this.$router.push('/professionaldashboard/home'); // Go to home to see history
                 } catch (error) {
                     console.error('Error rejecting service:', error);
                     alert(error.message);

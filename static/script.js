@@ -7,7 +7,7 @@ import AdminUsers from './component/AdminUsers.js';
 import AdminHistory from './component/AdminHistory.js';
 import AdminOngoing from './component/AdminOngoing.js';
 import AdminAnalytics from './component/AdminAnalytics.js';
-import UserDashboard from './component/UserDashboard.js';
+
 import ProfessionalDashboard from './component/ProfessionalDashboard.js';
 import ProfessionalHome from './component/ProfessionalHome.js';
 import ProfessionalRequested from './component/ProfessionalRequested.js';
@@ -57,7 +57,7 @@ const routes = [
       { path: 'profile', component: CustomerProfile }
     ]
   },
-  { path: '/userdashboard', component: UserDashboard },
+
 ];
 const router = new VueRouter({
   routes,
