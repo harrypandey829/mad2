@@ -5,6 +5,10 @@ from flask_security import Security , SQLAlchemyUserDatastore
 from flask_migrate import Migrate
 from flask_security import hash_password
 from application.resources import init_api  # Import init_api from resource.py
+from application.celery_init import celery_init_app
+from celery.schedules import crontab
+
+
 
 app =None
 def create_app():
@@ -16,12 +20,16 @@ def create_app():
     datastore = SQLAlchemyUserDatastore(db, User ,Role)# Datastore is a class which allows us to create entry in to database .
     app.security = Security(app, datastore) # Connect our appplication to flask security .
     # Initialize API routes from resource.py
+
+   
     init_api(app)
     migrate = Migrate(app, db)  # Flask-Migrate initialize 
     app.app_context().push()
     return app
 
 app = create_app()
+celery = celery_init_app(app)
+celery.autodiscover_tasks()
 
 # i want to create default user and role entries into the db.
 
@@ -48,6 +56,23 @@ with app.app_context():
 
 from application.routes import *
 # from applicarion.routes import *
+
+@celery.on_after_finalize.connect 
+def setup_periodic_tasks(sender, **kwargs):
+    # Daily Reminder har roz shaam 6 baje
+    sender.add_periodic_task(
+        crontab(hour=18, minute=0),  # 6 PM IST
+        daily_reminder.s(),
+        name='Daily Reminder at 6 PM'
+    )
+    # Monthly Report har mahine ki 1st ko subah 9 baje
+    sender.add_periodic_task(
+        crontab(day_of_month=1, hour=9, minute=0),  # 1st of every month, 9 AM
+        monthly_report.s(),
+        name='Monthly Report on 1st at 9 AM'
+    )
+
+
 if __name__ == "__main__":
     app.run()
 

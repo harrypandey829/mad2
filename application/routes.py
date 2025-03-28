@@ -1,10 +1,13 @@
-from flask import request, jsonify, render_template
+from flask import request, jsonify, render_template , send_from_directory
 from flask_security import hash_password, auth_required, current_user,roles_required,login_user 
 from .models import *
 from flask_security.utils import verify_password
 from flask import current_app as app 
 from datetime import datetime
 from sqlalchemy import func
+from celery.result import AsyncResult
+from application.tasks import csv_report
+
 
 # Create Blueprint
 
@@ -711,3 +714,24 @@ def warn_user(user_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+    
+
+
+from application.tasks import csv_report
+
+@app.route('/api/export', methods=['GET'])
+
+def export_csv():
+    result = csv_report.delay()
+    return jsonify({"id": result.id})
+
+@app.route('/api/csv_result/<id>', methods=['GET'])
+
+def csv_result(id):
+    res = AsyncResult(id)
+    if res.ready():
+        if res.successful():
+            return send_from_directory('static', res.result, as_attachment=True)
+        else:
+            return jsonify({"error": "Task failed"}), 500
+    return jsonify({"status": "Processing", "id": id})

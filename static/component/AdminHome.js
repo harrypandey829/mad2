@@ -1,7 +1,12 @@
 export default {
-    template: `
+  template: `
     <div>
       <h2 class="text-center mb-4 fw-bold text-uppercase" style="color: #2c3e50;">Admin Home</h2>
+      <!-- Download CSV Button Yahan Top Pe Add Kiya -->
+      <div class="text-end mb-3">
+        <button @click="csvExport" class="btn btn-secondary">Download Completed Services as CSV</button>
+        <p v-if="exportStatus" class="mt-2">{{ exportStatus }}</p>
+      </div>
       <div class="row">
         <div class="col-md-8">
           <h4 class="fw-bold mb-3" style="color: #34495e;">Available Services</h4>
@@ -77,108 +82,164 @@ export default {
       </div>
     </div>
     `,
-    data() {
-        return {
-            services: [],
-            newService: {
-                service_type: '',
-                base_price: null,
-                time_required: null,
-                description: ''
-            },
-            editingService: null
-        };
+  data() {
+    return {
+      services: [],
+      newService: {
+        service_type: '',
+        base_price: null,
+        time_required: null,
+        description: ''
+      },
+      editingService: null,
+      exportStatus: ''
+    };
+  },
+  mounted() {
+    this.fetchServices();
+  },
+  methods: {
+    async fetchServices() {
+      try {
+        const response = await fetch('/api/services', {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Authentication-Token': localStorage.getItem('authToken') || ''
+          }
+        });
+        if (!response.ok) throw new Error(`Failed to fetch services: ${response.status}`);
+        this.services = await response.json();
+      } catch (error) {
+        console.error('Error fetching services:', error);
+        alert(error.message);
+      }
     },
-    mounted() {
+    async createService() {
+      try {
+        const response = await fetch('/api/services', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authentication-Token': localStorage.getItem('authToken') || ''
+          },
+          credentials: 'include',
+          body: JSON.stringify(this.newService)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || `Failed to create service: ${response.status}`);
+        alert(data.message);
         this.fetchServices();
+        this.newService = { service_type: '', base_price: null, time_required: null, description: '' };
+      } catch (error) {
+        console.error('Error creating service:', error);
+        alert(error.message);
+      }
     },
-    methods: {
-        async fetchServices() {
-            try {
-                const response = await fetch('/api/services', {
-                    method: 'GET',
-                    credentials: 'include',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Authentication-Token': localStorage.getItem('authToken') || ''
-                    }
-                });
-                if (!response.ok) throw new Error(`Failed to fetch services: ${response.status}`);
-                this.services = await response.json();
-            } catch (error) {
-                console.error('Error fetching services:', error);
-                alert(error.message);
+    editService(service) {
+      this.editingService = { ...service };
+    },
+    async updateService() {
+      try {
+        const response = await fetch(`/api/services/${this.editingService.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authentication-Token': localStorage.getItem('authToken') || ''
+          },
+          credentials: 'include',
+          body: JSON.stringify(this.editingService)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || `Failed to update service: ${response.status}`);
+        alert(data.message);
+        this.fetchServices();
+        this.editingService = null;
+      } catch (error) {
+        console.error('Error updating service:', error);
+        alert(error.message);
+      }
+    },
+    async deleteService(serviceId) {
+      if (confirm('Are you sure you want to delete this service?')) {
+        try {
+          const response = await fetch(`/api/services/${serviceId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+            headers: {
+              'Accept': 'application/json',
+              'Authentication-Token': localStorage.getItem('authToken') || ''
             }
-        },
-        async createService() {
-            try {
-                const response = await fetch('/api/services', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'Authentication-Token': localStorage.getItem('authToken') || ''
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify(this.newService)
-                });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.message || `Failed to create service: ${response.status}`);
-                alert(data.message);
-                this.fetchServices();
-                this.newService = { service_type: '', base_price: null, time_required: null, description: '' };
-            } catch (error) {
-                console.error('Error creating service:', error);
-                alert(error.message);
-            }
-        },
-        editService(service) {
-            this.editingService = { ...service };
-        },
-        async updateService() {
-            try {
-                const response = await fetch(`/api/services/${this.editingService.id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'Authentication-Token': localStorage.getItem('authToken') || ''
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify(this.editingService)
-                });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.message || `Failed to update service: ${response.status}`);
-                alert(data.message);
-                this.fetchServices();
-                this.editingService = null;
-            } catch (error) {
-                console.error('Error updating service:', error);
-                alert(error.message);
-            }
-        },
-        async deleteService(serviceId) {
-            if (confirm('Are you sure you want to delete this service?')) {
-                try {
-                    const response = await fetch(`/api/services/${serviceId}`, {
-                        method: 'DELETE',
-                        credentials: 'include',
-                        headers: {
-                            'Accept': 'application/json',
-                            'Authentication-Token': localStorage.getItem('authToken') || ''
-                        }
-                    });
-                    if (!response.ok) {
-                        const data = await response.json();
-                        throw new Error(data.message || `Failed to delete service: ${response.status}`);
-                    }
-                    alert('Service deleted successfully');
-                    this.fetchServices();
-                } catch (error) {
-                    console.error('Error deleting service:', error);
-                    alert(error.message);
-                }
-            }
+          });
+          if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.message || `Failed to delete service: ${response.status}`);
+          }
+          alert('Service deleted successfully');
+          this.fetchServices();
+        } catch (error) {
+          console.error('Error deleting service:', error);
+          alert(error.message);
         }
+      }
+    },
+    csvExport() {
+      this.exportStatus = 'Processing...';
+      fetch('/api/export', {
+        method: 'GET',
+        headers: {
+          'Authentication-Token': localStorage.getItem('authToken') || ''
+        }
+      })
+        .then(response => {
+          if (!response.ok) throw new Error('Failed to trigger export');
+          return response.json();
+        })
+        .then(data => {
+          const taskId = data.id;
+          this.exportStatus = `Task ID: ${taskId}. Waiting for file...`;
+
+          const checkResult = setInterval(() => {
+            fetch(`/api/csv_result/${taskId}`, {
+              method: 'GET',
+              headers: {
+                'Authentication-Token': localStorage.getItem('authToken') || ''
+              }
+            })
+              .then(response => {
+                if (response.ok) {
+                  clearInterval(checkResult);
+                  response.blob().then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `completed_services_${new Date().toISOString().slice(0, 10)}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    this.exportStatus = 'File downloaded!';
+                  });
+                } else {
+                  return response.json();
+                }
+              })
+              .then(data => {
+                if (data && data.status === 'Processing') {
+                  this.exportStatus = 'Still processing...';
+                }
+              })
+              .catch(err => {
+                this.exportStatus = 'Error: ' + err.message;
+                clearInterval(checkResult);
+              });
+          }, 2000);
+        })
+        .catch(err => {
+          this.exportStatus = 'Error: ' + err.message;
+        });
     }
+  }
 };
