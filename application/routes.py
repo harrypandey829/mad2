@@ -6,7 +6,8 @@ from flask import current_app as app
 from datetime import datetime
 from sqlalchemy import func
 from celery.result import AsyncResult
-from application.tasks import csv_report
+from .tasks import csv_report, monthly_report, daily_reminder
+
 
 
 # Create Blueprint
@@ -735,3 +736,12 @@ def csv_result(id):
         else:
             return jsonify({"error": "Task failed"}), 500
     return jsonify({"status": "Processing", "id": id})
+
+
+@app.route('/api/mail')
+def send_reports():
+    res = monthly_report.delay()
+    return {
+        "status": "Mail task started!",
+        "task_id": res.id
+    }

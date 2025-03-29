@@ -5,15 +5,15 @@ from email.mime.text import MIMEText
 import os
 import smtplib
 
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587
-SENDER_EMAIL = os.getenv("SENDER_EMAIL")
-SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
+SMTP_SERVER_HOST = "localhost"
+SMTP_SERVER_PORT = 1025
+SENDER_ADDRESS = "fastlogistics@donotreply.in"
+SENDER_PASSWORD = ""
 
-def send_mail(receiver, subject, message, content="text", attachment=None):
+def send_email(to_address, subject, message, content = "html", attachment_file = None):   #default content -> html
     msg = MIMEMultipart()
-    msg['From'] = SENDER_EMAIL
-    msg['To'] = receiver
+    msg['From'] = SENDER_ADDRESS
+    msg['To'] = to_address
     msg['Subject'] = subject
 
     if content == "html":
@@ -21,17 +21,18 @@ def send_mail(receiver, subject, message, content="text", attachment=None):
     else:
         msg.attach(MIMEText(message, "plain"))
 
-    if attachment:
-        with open(attachment, 'rb') as attachment_:
-            part = MIMEBase('application', 'octet-stream')
-            part.set_payload(attachment_.read())
-        part.add_header('Content-Disposition', f'attachment; filename="{os.path.basename(attachment)}"')
-        encoders.encode_base64(part)
-        msg.attach(part)
+    if attachment_file:
+        with open(attachment_file, 'rb') as attachment:
+            part = MIMEBase("application", "octet-stream") # Add file as application/octet-stream
+            part.set_payload(attachment.read())
 
-    server = smtplib.SMTP(host=SMTP_HOST, port=SMTP_PORT)
-    server.starttls()
-    server.login(SENDER_EMAIL, SENDER_PASSWORD)
-    server.send_message(msg)
-    server.quit()
-    return 'Mail sent successfully !!'
+        encoders.encode_base64(part) # email attachments are sent as base64 encoded.
+        part.add_header("Content-Disposition", f"attachment; filename = {attachment_file}") # refer https://www.ietf.org/rtc/rtc2183.txt
+        msg.attach(part) #add attachment to message
+
+    s = smtplib.SMTP(host = SMTP_SERVER_HOST, port = SMTP_SERVER_PORT)
+    #s.login(SENDER_ADDRESS, SENDER_PASSWORD)
+    s.send_message(msg)
+    s.quit()
+
+    return True
