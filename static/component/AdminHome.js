@@ -10,7 +10,8 @@ export default {
       <div class="row">
         <div class="col-md-8">
           <h4 class="fw-bold mb-3" style="color: #34495e;">Available Services</h4>
-          <div class="row">
+          <!-- Scrollable Cards Added -->
+          <div class="row" style="max-height: 600px; overflow-y: auto;">
             <div class="col-md-6 mb-3" v-for="service in services" :key="service.id">
               <div class="card h-100 shadow-sm border-0">
                 <div class="card-body">

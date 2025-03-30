@@ -21,6 +21,7 @@ export default {
                 <strong>Address:</strong> {{ user.address || 'N/A' }}<br>
                 <strong>Rating:</strong> {{ user.user_rating || 'Not Rated' }}<br>
                 <strong>Service Type:</strong> {{ user.service_type || 'None' }}<br>
+                <strong>Completed Services:</strong> {{ user.completed_services_count || 0 }}<br>
                 <strong>Description:</strong> {{ user.description || 'N/A' }}
               </p>
               <div class="d-flex justify-content-between flex-wrap gap-2">
@@ -76,7 +77,7 @@ export default {
                 });
                 if (!response.ok) throw new Error(`Failed to fetch users: ${response.status}`);
                 this.users = await response.json();
-                this.filteredUsers = this.users; // Initially show all users
+                this.filteredUsers = this.users;
             } catch (error) {
                 console.error('Error fetching users:', error);
                 alert(error.message);
@@ -155,10 +156,9 @@ export default {
             }
         },
         canBlock(user) {
-            // Block button enable only if rating < 3 and completed services >= 2
+            // Block button enable only if rating < 3
             const rating = user.user_rating || 0;
-            const completedServices = this.users.filter(u => u.id === user.id).length; // Approximation, ideally fetch from backend
-            return rating < 3 && completedServices >= 2 && !user.is_blocked;
+            return rating < 3 && !user.is_blocked;
         },
         isWarned(user) {
             return user.description && user.description.includes('Warning');

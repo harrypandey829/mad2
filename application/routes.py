@@ -285,11 +285,18 @@ def get_all_users():
             'service_type': user.service_type,
             'roles': [role.name for role in user.roles],
             'is_verified': user.is_verified,
-            'is_blocked': user.is_blocked
+            'is_blocked': user.is_blocked,
+            'completed_services_count': ServiceRequest.query.filter(
+                ServiceRequest.professional_id == user.id,  # Count as professional
+                ServiceRequest.status == 'Completed'
+            ).count() if 'professional' in [role.name for role in user.roles] else ServiceRequest.query.filter(
+                ServiceRequest.customer_id == user.id,  # Count as customer
+                ServiceRequest.status == 'Completed'
+            ).count()
         } for user in users]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
+    
 # Toggle Verification
 @app.route('/api/admin/users/<int:user_id>/verify', methods=['PUT'])
 @auth_required('token')
@@ -332,8 +339,8 @@ def toggle_block(user_id):
                 customer_id=user.id,
                 status='Completed'
             ).count()
-            if completed_services < 2:
-                return jsonify({'error': 'Cannot block user with fewer than 2 completed services'}), 400
+            # if completed_services < 2:
+            #     return jsonify({'error': 'Cannot block user with fewer than 2 completed services'}), 400
             if user.user_rating is None or user.user_rating >= 3:
                 return jsonify({'error': 'Cannot block user with rating 3 or higher (or unrated)'}), 400
 

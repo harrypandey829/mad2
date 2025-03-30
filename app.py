@@ -59,7 +59,7 @@ from application.routes import *
 
 @celery.on_after_finalize.connect 
 def setup_periodic_tasks(sender, **kwargs):
-    # Daily Reminder har roz shaam 6 baje
+    
     sender.add_periodic_task(
         crontab(minute='*/2'),  # 6 PM IST
         daily_reminder.s(),
